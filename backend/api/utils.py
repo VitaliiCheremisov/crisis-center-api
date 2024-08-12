@@ -1,6 +1,9 @@
 # Модуль бизнес логики проекта.
+import csv
 import http
 import requests
+import os
+import shutil
 from datetime import datetime
 
 from django.conf import settings
@@ -8,13 +11,18 @@ from django.utils.timezone import make_aware
 from rest_framework import status
 from rest_framework.response import Response
 
-from contacts.models import Contact
+from contacts.models import Donor
 from mixplat.models import MixPlat
 
 
 def string_to_date(value):
     """Метод преобразования строки в дату, установка time-zone."""
     return make_aware(datetime.strptime(value, settings.DATE_FORMAT))
+
+
+def donor_exists(email):
+    """Метод проверки наличия контакта донора в ДБ."""
+    return Donor.objects.filter(email=email).exists()
 
 
 def mixplat_request_handler(request):
@@ -33,21 +41,11 @@ def mixplat_request_handler(request):
             payment_operator="mixplat",
             currency=request.data["currency"],
         )
-        contact_obj_dict = dict(
-            username=request.data["user_name"],
-            email=request.data["user_email"],
-            subject=request.data["user_account_id"],
-            comment=request.data["user_comment"],
-        )
+
         MixPlat.objects.create(**mixplat_obj_dict)
-        if (
-            Contact.objects.filter(
-                username=request.data["user_name"],
-                email=request.data["user_email"],
-            ).exists()
-            is False
-        ):
-            Contact.objects.create(**contact_obj_dict)
+
+        if donor_exists(request.data["user_email"]) is False:
+            Donor.objects.create(request.data["user_email"])
 
         return Response(dict(result="ok"), status=status.HTTP_200_OK)
     except KeyError:
@@ -110,7 +108,44 @@ def send_payment_email(email, message):
 
     response = requests.post(url, data=data)
 
-    if response.status_code != 200:
+    if response.status_code != status.HTTP_200_OK:
         print(f"Ошибка при отправке сообщения: {response.status_code}")
     else:
         print("Сообщение успешно отправлено")
+
+
+def send_request():
+    """Отправка запроса на получение контактов доноров от Unisender."""
+    response = requests.get(settings.REQUEST_URL)
+    if response.status_code != status.HTTP_200_OK:
+        raise f"Ошибка при запросе: {response.status_code}"
+    return response.json()["result"]["task_uuid"]
+
+
+def add_contacts(file_url):
+    """Добавление доноров в БД из файла, получаемого по ссылке."""
+    response = requests.get(file_url)
+    if response.status_code == status.HTTP_200_OK:
+        directory = "files"
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        file_path = os.path.join(directory, "data.csv")
+
+        with open(file_path, "wb") as file:
+            file.write(response.content)
+
+        with open(file_path, encoding="utf-8") as csv_file:
+            file_reader = csv.reader(csv_file, delimiter=",")
+            count = 0
+            bulk_list = list()
+            for row in file_reader:
+                if count != 0 and donor_exists(row) is False:
+                    bulk_list.append(Donor(email=row))
+                count += 1
+            Donor.objects.bulk_create(bulk_list)
+            print(f"Добавленно {count - 1} контактов.")
+
+        try:
+            shutil.rmtree(directory)  # удаляем папку с файлом
+        except OSError as e:
+            raise f"Error: {e.filename, e.strerror}"

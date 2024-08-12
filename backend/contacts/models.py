@@ -38,3 +38,17 @@ class Contact(AbstractUser):
 
     def __str__(self):
         return f"{self.username} - {self.email}"
+
+
+class Donor(models.Model):
+    """Модель контактов доноров."""
+
+    email = models.EmailField(
+        max_length=settings.MAX_EMAIL_LENGTH,
+        unique=True,
+        validators=[forbidden_words_validator],
+        verbose_name="Электронная почта донора",
+    )
+
+    def __str__(self):
+        return self.email

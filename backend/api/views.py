@@ -13,7 +13,12 @@ from .serializers import (
     CloudpaymentsSerializer,
     MixPlatSerializer,
 )
-from .utils import mixplat_request_handler, get_cloudpayment_data
+from .utils import (
+    add_contacts,
+    get_cloudpayment_data,
+    mixplat_request_handler,
+    send_request,
+)
 from contacts.models import Contact
 from forbiddenwords.models import ForbiddenWord
 from mixplat.models import MixPlat
@@ -26,10 +31,25 @@ class ContactViewSet(viewsets.ModelViewSet):
     queryset = Contact.objects.all()
     serializer_class = ContactSerializer
 
-    @action(detail=False, url_path="get_contacts", methods=("post",))
+    @action(detail=False, url_path="start", methods=("get",))
+    def start(self, request):
+        """Запуск процесса получения контактов из Unisender."""
+        return Response(
+            dict(task_uuid=send_request()), status=status.HTTP_200_OK
+        )
+
+    @action(
+        detail=False,
+        url_path="get_contacts",
+        methods=(
+            "get",
+            "post",
+        ),
+    )
     def get_contacts(self, request):
         """Метод получения контактов от Unisender."""
-        # проверка ручки, что живая из постман.
+        add_contacts(request.data["result"]["file_to_download"])
+
         return Response(dict(result="ok"), status=status.HTTP_200_OK)
 
 

@@ -172,3 +172,5 @@ DEFAULT_CONF = {
     "api_key": None,
     "platform": None,
 }
+
+REQUEST_URL = os.getenv("REQUEST_URL")
