@@ -1,0 +1,16 @@
+venv
+.git
+db.sqlite3
+.vscode
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.idea/
+
+# PostgreSQL data directory
+/data
+/pg_log

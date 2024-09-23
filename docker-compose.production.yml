@@ -1,0 +1,46 @@
+volumes:
+  pg_data_production:
+  static:
+  rabbitmq_data:
+
+services:
+  db:
+    image: postgres:13.10
+    env_file: .env
+    volumes:
+      - pg_data_production:/var/lib/postgresql/data
+    restart: always
+
+  backend:
+    image: amadeus161/crisis-center_backend:latest
+#    build: ./backend/
+    env_file: .env
+    volumes:
+      - static:/app/static/
+    depends_on:
+      - db
+    restart: on-failure
+
+  nginx:
+    image: amadeus161/crisis-center_nginx:latest
+    # build: ./nginx/
+    env_file: .env
+    ports:
+      - 8000:80
+    volumes:
+      - static:/static/
+    depends_on:
+      - backend
+    restart: always
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    restart: always
